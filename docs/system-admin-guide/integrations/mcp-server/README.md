@@ -9,15 +9,30 @@ keywords: ai llm mcp
 
 [feature: mcp_server ]
 
+> [!NOTE]
+> The MCP Server is an **Enterprise add-on** and is currently in **beta**. Configuration options and available tools may change in future releases.
+
 OpenProject allows AI agents and similar tools to integrate through an API called **Model Context Protocol** (MCP). This allows agents to access information from your OpenProject instance and perform actions.
 
+For the user-facing semanas perspective on configuring an MCP client and using the available tools, please see the [MCP Server user guide](../../../user-guide/mcp-server/).
+
 ## Configuration
+
+### MCP endpoint
 
 In your MCP client, you have to configure the endpoint of the OpenProject MCP server, which is available under `/mcp`, so for example:
 
 ```text
 https://your-openproject.example.com/mcp
 ```
+
+### Enabling the MCP server
+
+The MCP server can be enabled or disabled globally under _Administration → Artificial Intelligence (AI) → Model Context Protocol (MCP)_.
+
+![Model context protocol (MCP) settings under OpenProject administration](openproject_system_guide_new_mcp.png)
+
+When the MCP server is disabled, all requests to the `/mcp` endpoint will be rejected. Enable the checkbox to activate the server and expose the available tools and resources to MCP clients.
 
 ### Authentication
 
@@ -34,6 +49,9 @@ Afterwards users that want to make use of MCP on a personal basis, can create a 
 token. However, this only works properly with locally running MCP clients that are only used by a single user and it requires the user
 to configure the MCP endpoint themselves.
 
+> [!NOTE]
+> The API token is sent as a Bearer token in the `Authorization` header of each MCP request.
+
 #### Shared access via OAuth
 
 If multiple users shall be able to use information from the same OpenProject instance and when using web-based MCP clients, the typical
@@ -47,8 +65,8 @@ by OpenProject already, namely:
 - Tokens issued from a compliant OpenID Connect provider
 
 In case OpenProject is used as the authentication provider, the configuration for the client has to be prepared by the administrator.
-Go to _Administration -> Authentication -> OAuth applications_ and create an application with the `mcp` scope, entering
-the "Redirect URI" according to the instructions of your MCP client. 
+Go to _Administration → Authentication → OAuth applications_ and create an application with the `mcp` scope, entering
+the "Redirect URI" according to the instructions of your MCP client.
 
 > [!IMPORTANT]
 >
@@ -56,9 +74,77 @@ the "Redirect URI" according to the instructions of your MCP client.
 
 ![Create new OAuth application for an MCP server in OpenProject administration](openproject_system_guide_new_oauth_mcp.png)
 
+##### OAuth redirect URI
+
+The **Redirect URI** (also called callback URL) tells OpenProject where to send the user's browser after they have authorized (or denied) the MCP client's access request. The exact value depends on your MCP client:
+
+| MCP client type | Typical redirect URI |
+| --- | --- |
+| Web-based AI assistant | `https://your-mcp-client.example.com/callback` |
+| Desktop client (loopback) | `http://localhost:PORT/callback` (e.g. `http://localhost:3000/callback`) |
+| Custom application | The endpoint your application exposes to receive the authorization code |
+
+To find the correct redirect URI:
+
+1. Check your MCP client's documentation or configuration screen for a field labeled **Redirect URI**, **Callback URL**, or similar.
+2. Copy the value exactly as provided, including the scheme (`http` or `https`), host, port (if non-default), and path.
+3. Paste it into the **Redirect URI** field in the OpenProject OAuth application configuration.
+4. If your client supports multiple redirect URIs (e.g. one for development and one for production), enter each on a separate line.
+
+> [!TIP]
+> If you are unsure of the redirect URI, configure the MCP client first and look for the callback URL it expects. Many MCP clients display the expected redirect URI during their setup wizard.
+
+#### Session cookie authentication
+
+[feature: mcp_session_cookie ]
+
+In addition to API tokens and OAuth, OpenProject also supports authentication to the MCP endpoint via the user's **session cookie**. This is particularly useful for browser-based or embedded MCP clients that already have an active OpenProject session.
+
+When a user is logged in to OpenProject in their browser, MCP clients running in the same browser context can use the existing session cookie to authenticate with the `/mcp` endpoint. No additional token or OAuth flow is required.
+
+To enable session cookie authentication:
+
+1. Navigate to _Administration → Artificial Intelligence (AI) → Model Context Protocol (MCP)_.
+2. Enable the **Allow session cookie authentication** option.
+3. Save your changes.
+
+> [!IMPORTANT]
+> Session cookie authentication only works when the MCP client runs in the same browser context as the OpenProject session. It does not apply to standalone desktop clients or server-to-server integrations.
+
+### Per-project access control
+
+[feature: mcp_project_access ]
+
+Administrators can control which projects are accessible through MCP on a per-project basis. This allows you to limit the exposure of project data to AI clients.
+
+To enable read access for MCP per project:
+
+1. Navigate to the project settings of the project you want to configure.
+2. In the project settings, look for the **MCP** or **AI** section.
+3. Enable or disable MCP access for that project.
+
+When MCP access is disabled for a project, MCP clients will not be able to search, read, or create work packages in that project, even if the authenticated user has project permissions.
+
+> [!NOTE]
+> Per-project access control is evaluated in addition to the user's regular project permissions. A user must have both the appropriate project role **and** MCP access must be enabled for the project.
+
+### Restricting MCP to specific users or groups
+
+[feature: mcp_user_restriction ]
+
+Administrators can limit MCP usage to specific users or groups. This is useful when you want to pilot MCP with a small team before rolling it out organization-wide.
+
+To restrict MCP access:
+
+1. Navigate to _Administration → Artificial Intelligence (AI) → Model Context Protocol (MCP)_.
+2. Under **Allowed users and groups**, select the users or groups that should be permitted to use MCP.
+3. Save your changes.
+
+If no users or groups are selected, MCP access is available to all authenticated users (subject to per-project settings). If at least one user or group is selected, only those users (and members of the selected groups) will be able to access the MCP endpoint.
+
 ### Customization
 
-You can customize the MCP server further under _Administration -> Artificial Intelligence (AI) -> Model Context Protocol (MCP)_. 
+You can customize the MCP server further under _Administration → Artificial Intelligence (AI) → Model Context Protocol (MCP)_. 
 
 Here you can enable or disable the entire MCP server and change the MCP server titles and descriptions indicated towards MCP clients. If you think that your MCP client is passing duplicated information to the language model, you can also change the response format, though for most purposes the default should work well.
 
@@ -68,10 +154,9 @@ The available response format options are:
 - **Structured content only**: Choose this if you are certain that MCP clients connecting to this instance  support structured content. Tool responses will only include structured  content and leave out its text representation. 
 - **Content only**: Choose this if MCP clients connecting to this instance do not support  structured content. Tool responses will only contain plain text content  and leave out the structured version. 
 
-![Model context protocol (MCP) settings under OpenProject administration](openproject_system_guide_new_mcp.png)
+![Model context protocol (MCP) settings in OpenProject administration](openproject_system_guide_new_mcp.png)
 
 Individual tools and resources can also be enabled or disabled. Their titles and descriptions can be customized. This can be useful if you want to introduce alternative terminology for certain entities or limit the functionality available through MCP.
-want to introduce alternative terminology for certain entities or limit the functionality available through MCP.
 
 For example, if work packages are called "work items" in your day-to-day language, you can rename **Search work packages** to **Search work
 items**. This helps users understand what the tool does and gives the language model an additional cue that "work items" is an alias for work
@@ -82,7 +167,53 @@ been customized by an administrator.
 
 ![MCP tools section settings in OpenProject administration](openproject_system_guide_new_mcp_tools.png)
 
+## Best practices
 
+### Security
+
+- **Use OAuth for shared clients**: When multiple users interact with the same MCP client (e.g. a web-based AI assistant), always use OAuth2 instead of personal API tokens. This ensures each user's actions are attributed correctly and access is scoped to their permissions.
+- **Restrict MCP to trusted users**: During the beta phase, consider limiting MCP access to a small group of power users or administrators.
+- **Disable unused tools**: If your organization does not use time tracking or relations, disable the corresponding MCP tools to reduce the attack surface and avoid confusing the AI assistant.
+- **Review per-project settings**: Regularly audit which projects have MCP access enabled, especially after creating new projects.
+
+### Performance
+
+- **Choose the right response format**: If your MCP client supports structured content, switch from "Full" to "Structured content only" to reduce token usage and improve response times.
+- **Disable unused tools**: Fewer tools means smaller tool descriptions sent to the AI model, which reduces token consumption and improves response quality.
+- **Monitor usage**: Use OpenProject's activity logs to monitor MCP usage patterns and identify potential abuse or performance issues.
+
+### Customization
+
+- **Rename tools for your domain**: If your team uses different terminology (e.g. "tickets" instead of "work packages"), rename the MCP tools accordingly. This helps the AI model understand user requests better.
+- **Curate tool descriptions**: Customize tool descriptions to include organization-specific context, such as naming conventions or required fields.
+
+## Troubleshooting
+
+### MCP clients cannot connect
+
+- Verify that the MCP server is **enabled** under _Administration → Artificial Intelligence (AI) → Model Context Protocol (MCP)_.
+- Check that the MCP endpoint URL is correct: `https://your-openproject.example.com/mcp`.
+- If using API tokens, ensure **Enable API tokens** is checked under _Administration → API and webhooks_.
+- If using OAuth, verify the OAuth application has the `mcp` scope and is marked as **confidential**.
+- If using session cookies, ensure the **Allow session cookie authentication** option is enabled.
+
+### Users get permission errors
+
+- Check that the user is in the **allowed users or groups** list (if restriction is enabled).
+- Verify the user has the appropriate **project role** in the projects they are trying to access.
+- If per-project access control is enabled, make sure MCP access is enabled for the relevant project.
+
+### OAuth redirect fails
+
+- Double-check the **Redirect URI** in the OAuth application matches exactly what the MCP client expects (including scheme, host, port, and path).
+- Ensure the OAuth application is marked as **confidential**.
+- Verify that the `mcp` scope is included in the OAuth application configuration.
+
+### AI responses are too large or slow
+
+- Switch the response format to **Structured content only** or **Content only** instead of **Full**.
+- Disable tools that are not needed by your users.
+- Remind users that search results are paginated — the AI client should fetch additional pages only when needed.
 
 ## Tools
 
